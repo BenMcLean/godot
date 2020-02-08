@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2019 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2019 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -32,8 +32,10 @@
 
 #include "core/io/json.h"
 #include "core/version.h"
-#include "editor_node.h"
-#include "editor_settings.h"
+#include "editor/editor_node.h"
+#include "editor/editor_scale.h"
+#include "editor/editor_settings.h"
+#include "editor/project_settings_editor.h"
 
 void EditorAssetLibraryItem::configure(const String &p_title, int p_asset_id, const String &p_category, int p_category_id, const String &p_author, int p_author_id, const String &p_cost) {
 
@@ -137,8 +139,6 @@ EditorAssetLibraryItem::EditorAssetLibraryItem() {
 
 	set_custom_minimum_size(Size2(250, 100) * EDSCALE);
 	set_h_size_flags(SIZE_EXPAND_FILL);
-
-	set_mouse_filter(MOUSE_FILTER_PASS);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -160,7 +160,7 @@ void EditorAssetLibraryItemDescription::set_image(int p_type, int p_index, const
 						Ref<Image> overlay = get_icon("PlayOverlay", "EditorIcons")->get_data();
 						Ref<Image> thumbnail = p_image->get_data();
 						thumbnail = thumbnail->duplicate();
-						Point2 overlay_pos = Point2((thumbnail->get_width() - overlay->get_width() / 2) / 2, (thumbnail->get_height() - overlay->get_height() / 2) / 2);
+						Point2 overlay_pos = Point2((thumbnail->get_width() - overlay->get_width()) / 2, (thumbnail->get_height() - overlay->get_height()) / 2);
 
 						// Overlay and thumbnail need the same format for `blend_rect` to work.
 						thumbnail->convert(Image::FORMAT_RGBA8);
@@ -196,14 +196,15 @@ void EditorAssetLibraryItemDescription::set_image(int p_type, int p_index, const
 		} break;
 	}
 }
+
 void EditorAssetLibraryItemDescription::_notification(int p_what) {
 	switch (p_what) {
 		case NOTIFICATION_ENTER_TREE: {
 			previews_bg->add_style_override("panel", get_stylebox("normal", "TextEdit"));
-			desc_bg->add_style_override("panel", get_stylebox("normal", "TextEdit"));
 		} break;
 	}
 }
+
 void EditorAssetLibraryItemDescription::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_image"), &EditorAssetLibraryItemDescription::set_image);
 	ClassDB::bind_method(D_METHOD("_link_click"), &EditorAssetLibraryItemDescription::_link_click);
@@ -283,16 +284,13 @@ EditorAssetLibraryItemDescription::EditorAssetLibraryItemDescription() {
 	item = memnew(EditorAssetLibraryItem);
 
 	desc_vbox->add_child(item);
-	desc_vbox->set_custom_minimum_size(Size2(300 * EDSCALE, 0));
-
-	desc_bg = memnew(PanelContainer);
-	desc_vbox->add_child(desc_bg);
-	desc_bg->set_v_size_flags(SIZE_EXPAND_FILL);
+	desc_vbox->set_custom_minimum_size(Size2(440 * EDSCALE, 0));
 
 	description = memnew(RichTextLabel);
-	desc_bg->add_child(description);
+	desc_vbox->add_child(description);
+	description->set_v_size_flags(SIZE_EXPAND_FILL);
 	description->connect("meta_clicked", this, "_link_click");
-	description->set_custom_minimum_size(Size2(440 * EDSCALE, 300 * EDSCALE));
+	description->add_constant_override("line_separation", Math::round(5 * EDSCALE));
 
 	VBoxContainer *previews_vbox = memnew(VBoxContainer);
 	hbox->add_child(previews_vbox);
@@ -435,7 +433,10 @@ void EditorAssetLibraryItemDownload::_notification(int p_what) {
 							String::humanize_size(download->get_body_size())));
 				} else {
 					// Total file size is unknown, so it cannot be displayed.
-					status->set_text(TTR("Downloading..."));
+					progress->set_modulate(Color(0, 0, 0, 0));
+					status->set_text(vformat(
+							TTR("Downloading...") + " (%s)",
+							String::humanize_size(download->get_downloaded_bytes())));
 				}
 			}
 
@@ -580,7 +581,6 @@ void EditorAssetLibrary::_notification(int p_what) {
 		case NOTIFICATION_READY: {
 
 			error_tr->set_texture(get_icon("Error", "EditorIcons"));
-			reverse->set_icon(get_icon("Sort", "EditorIcons"));
 			filter->set_right_icon(get_icon("Search", "EditorIcons"));
 			filter->set_clear_button_enabled(true);
 
@@ -588,7 +588,7 @@ void EditorAssetLibrary::_notification(int p_what) {
 		} break;
 		case NOTIFICATION_VISIBILITY_CHANGED: {
 
-			if (is_visible()) {
+			if (is_visible() && initial_loading) {
 				_repository_changed(0); // Update when shown for the first time.
 			}
 		} break;
@@ -614,7 +614,6 @@ void EditorAssetLibrary::_notification(int p_what) {
 			library_scroll_bg->add_style_override("panel", get_stylebox("bg", "Tree"));
 			downloads_scroll->add_style_override("bg", get_stylebox("bg", "Tree"));
 			error_tr->set_texture(get_icon("Error", "EditorIcons"));
-			reverse->set_icon(get_icon("Sort", "EditorIcons"));
 			filter->set_right_icon(get_icon("Search", "EditorIcons"));
 			filter->set_clear_button_enabled(true);
 		} break;
@@ -647,23 +646,27 @@ void EditorAssetLibrary::_install_asset() {
 }
 
 const char *EditorAssetLibrary::sort_key[SORT_MAX] = {
-	"downloads",
+	"updated",
+	"updated",
+	"name",
 	"name",
 	"cost",
-	"updated"
+	"cost",
 };
 
 const char *EditorAssetLibrary::sort_text[SORT_MAX] = {
-	"Downloads",
-	"Name",
-	"License", // "cost" stores the SPDX license name in the Godot Asset Library.
-	"Updated"
+	TTRC("Recently Updated"),
+	TTRC("Least Recently Updated"),
+	TTRC("Name (A-Z)"),
+	TTRC("Name (Z-A)"),
+	TTRC("License (A-Z)"), // "cost" stores the SPDX license name in the Godot Asset Library.
+	TTRC("License (Z-A)"), // "cost" stores the SPDX license name in the Godot Asset Library.
 };
 
 const char *EditorAssetLibrary::support_key[SUPPORT_MAX] = {
 	"official",
 	"community",
-	"testing"
+	"testing",
 };
 
 void EditorAssetLibrary::_select_author(int p_id) {
@@ -724,9 +727,9 @@ void EditorAssetLibrary::_image_update(bool use_cache, bool final, const PoolByt
 		uint8_t jpg_signature[3] = { 255, 216, 255 };
 
 		if (r.ptr()) {
-			if (memcmp(&r[0], &png_signature[0], 8) == 0) {
+			if ((memcmp(&r[0], &png_signature[0], 8) == 0) && Image::_png_mem_loader_func) {
 				image->copy_internals_from(Image::_png_mem_loader_func(r.ptr(), len));
-			} else if (memcmp(&r[0], &jpg_signature[0], 3) == 0) {
+			} else if ((memcmp(&r[0], &jpg_signature[0], 3) == 0) && Image::_jpg_mem_loader_func) {
 				image->copy_internals_from(Image::_jpg_mem_loader_func(r.ptr(), len));
 			}
 		}
@@ -807,7 +810,7 @@ void EditorAssetLibrary::_image_request_completed(int p_status, int p_code, cons
 		_image_update(p_code == HTTPClient::RESPONSE_NOT_MODIFIED, true, p_data, p_queue_id);
 
 	} else {
-		WARN_PRINTS("Error getting image file from URL: " + image_queue[p_queue_id].image_url);
+		WARN_PRINT("Error getting image file from URL: " + image_queue[p_queue_id].image_url);
 		Object *obj = ObjectDB::get_instance(image_queue[p_queue_id].target);
 		if (obj) {
 			obj->call("set_image", image_queue[p_queue_id].image_type, image_queue[p_queue_id].image_index, get_icon("FileBrokenBigThumb", "EditorIcons"));
@@ -930,8 +933,8 @@ void EditorAssetLibrary::_search(int p_page) {
 		args += "&category=" + itos(categories->get_item_metadata(categories->get_selected()));
 	}
 
-	if (reverse->is_pressed()) {
-
+	// Sorting options with an odd index are always the reverse of the previous one
+	if (sort->get_selected() % 2 == 1) {
 		args += "&reverse=true";
 	}
 
@@ -1135,8 +1138,13 @@ void EditorAssetLibrary::_http_request_completed(int p_status, int p_code, const
 		} break;
 		case REQUESTING_SEARCH: {
 
-			// The loading text only needs to be displayed before the first page is loaded
+			initial_loading = false;
+
+			// The loading text only needs to be displayed before the first page is loaded.
+			// Therefore, we don't need to show it again.
 			library_loading->hide();
+
+			library_error->hide();
 
 			if (asset_items) {
 				memdelete(asset_items);
@@ -1184,6 +1192,11 @@ void EditorAssetLibrary::_http_request_completed(int p_status, int p_code, const
 
 			asset_bottom_page = _make_pages(page, pages, page_len, total_items, result.size());
 			library_vb->add_child(asset_bottom_page);
+
+			if (result.empty()) {
+				library_error->set_text(vformat(TTR("No results for \"%s\"."), filter->get_text()));
+				library_error->show();
+			}
 
 			for (int i = 0; i < result.size(); i++) {
 
@@ -1330,6 +1343,7 @@ EditorAssetLibrary::EditorAssetLibrary(bool p_templates_only) {
 
 	requesting = REQUESTING_NONE;
 	templates_only = p_templates_only;
+	initial_loading = true;
 
 	VBoxContainer *library_main = memnew(VBoxContainer);
 
@@ -1372,19 +1386,13 @@ EditorAssetLibrary::EditorAssetLibrary(bool p_templates_only) {
 	search_hb2->add_child(memnew(Label(TTR("Sort:") + " ")));
 	sort = memnew(OptionButton);
 	for (int i = 0; i < SORT_MAX; i++) {
-		sort->add_item(sort_text[i]);
+		sort->add_item(TTRGET(sort_text[i]));
 	}
 
 	search_hb2->add_child(sort);
 
 	sort->set_h_size_flags(SIZE_EXPAND_FILL);
 	sort->connect("item_selected", this, "_rerun_search");
-
-	reverse = memnew(ToolButton);
-	reverse->set_toggle_mode(true);
-	reverse->connect("toggled", this, "_rerun_search");
-	reverse->set_tooltip(TTR("Reverse sorting."));
-	search_hb2->add_child(reverse);
 
 	search_hb2->add_child(memnew(VSeparator));
 
@@ -1445,7 +1453,6 @@ EditorAssetLibrary::EditorAssetLibrary(bool p_templates_only) {
 	library_scroll->add_child(library_vb_border);
 	library_vb_border->add_style_override("panel", border2);
 	library_vb_border->set_h_size_flags(SIZE_EXPAND_FILL);
-	library_vb_border->set_mouse_filter(MOUSE_FILTER_PASS);
 
 	library_vb = memnew(VBoxContainer);
 	library_vb->set_h_size_flags(SIZE_EXPAND_FILL);
@@ -1455,6 +1462,11 @@ EditorAssetLibrary::EditorAssetLibrary(bool p_templates_only) {
 	library_loading = memnew(Label(TTR("Loading...")));
 	library_loading->set_align(Label::ALIGN_CENTER);
 	library_vb->add_child(library_loading);
+
+	library_error = memnew(Label);
+	library_error->set_align(Label::ALIGN_CENTER);
+	library_error->hide();
+	library_vb->add_child(library_error);
 
 	asset_top_page = memnew(HBoxContainer);
 	library_vb->add_child(asset_top_page);
@@ -1484,6 +1496,7 @@ EditorAssetLibrary::EditorAssetLibrary(bool p_templates_only) {
 	error_label->add_color_override("color", get_color("error_color", "Editor"));
 	error_hb->add_child(error_label);
 	error_tr = memnew(TextureRect);
+	error_tr->set_v_size_flags(Control::SIZE_SHRINK_CENTER);
 	error_hb->add_child(error_tr);
 
 	description = NULL;

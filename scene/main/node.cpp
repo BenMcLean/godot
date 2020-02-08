@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2019 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2019 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -835,19 +835,31 @@ bool Node::is_processing_internal() const {
 void Node::set_process_priority(int p_priority) {
 	data.process_priority = p_priority;
 
-	ERR_FAIL_COND(!data.tree);
+	// Make sure we are in SceneTree.
+	if (data.tree == NULL) {
+		return;
+	}
 
-	if (is_processing())
+	if (is_processing()) {
 		data.tree->make_group_changed("idle_process");
+	}
 
-	if (is_processing_internal())
+	if (is_processing_internal()) {
 		data.tree->make_group_changed("idle_process_internal");
+	}
 
-	if (is_physics_processing())
+	if (is_physics_processing()) {
 		data.tree->make_group_changed("physics_process");
+	}
 
-	if (is_physics_processing_internal())
+	if (is_physics_processing_internal()) {
 		data.tree->make_group_changed("physics_process_internal");
+	}
+}
+
+int Node::get_process_priority() const {
+
+	return data.process_priority;
 }
 
 void Node::set_process_input(bool p_enable) {
@@ -1180,7 +1192,7 @@ void Node::add_child_below_node(Node *p_node, Node *p_child, bool p_legible_uniq
 	if (is_a_parent_of(p_node)) {
 		move_child(p_child, p_node->get_position_in_parent() + 1);
 	} else {
-		WARN_PRINTS("Cannot move under node " + p_node->get_name() + " as " + p_child->get_name() + " does not share a parent.");
+		WARN_PRINT("Cannot move under node " + p_node->get_name() + " as " + p_child->get_name() + " does not share a parent.");
 	}
 }
 
@@ -1875,6 +1887,19 @@ String Node::get_filename() const {
 	return data.filename;
 }
 
+void Node::set_editor_description(const String &p_editor_description) {
+
+	set_meta("_editor_description_", p_editor_description);
+}
+String Node::get_editor_description() const {
+
+	if (has_meta("_editor_description_")) {
+		return get_meta("_editor_description_");
+	} else {
+		return "";
+	}
+}
+
 void Node::set_editable_instance(Node *p_node, bool p_editable) {
 
 	ERR_FAIL_NULL(p_node);
@@ -2158,7 +2183,7 @@ void Node::_duplicate_and_reown(Node *p_new_parent, const Map<Node *, Node *> &p
 	if (get_filename() != "") {
 
 		Ref<PackedScene> res = ResourceLoader::load(get_filename());
-		ERR_FAIL_COND(res.is_null());
+		ERR_FAIL_COND_MSG(res.is_null(), "Cannot load scene: " + get_filename());
 		node = res->instance();
 		ERR_FAIL_COND(!node);
 	} else {
@@ -2655,7 +2680,8 @@ void Node::clear_internal_tree_resource_paths() {
 
 String Node::get_configuration_warning() const {
 
-	if (get_script_instance() && get_script_instance()->has_method("_get_configuration_warning")) {
+	if (get_script_instance() && get_script_instance()->get_script().is_valid() &&
+			get_script_instance()->get_script()->is_tool() && get_script_instance()->has_method("_get_configuration_warning")) {
 		return get_script_instance()->call("_get_configuration_warning");
 	}
 	return String();
@@ -2741,6 +2767,7 @@ void Node::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_process_delta_time"), &Node::get_process_delta_time);
 	ClassDB::bind_method(D_METHOD("set_process", "enable"), &Node::set_process);
 	ClassDB::bind_method(D_METHOD("set_process_priority", "priority"), &Node::set_process_priority);
+	ClassDB::bind_method(D_METHOD("get_process_priority"), &Node::get_process_priority);
 	ClassDB::bind_method(D_METHOD("is_processing"), &Node::is_processing);
 	ClassDB::bind_method(D_METHOD("set_process_input", "enable"), &Node::set_process_input);
 	ClassDB::bind_method(D_METHOD("is_processing_input"), &Node::is_processing_input);
@@ -2788,6 +2815,10 @@ void Node::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("rpc_config", "method", "mode"), &Node::rpc_config);
 	ClassDB::bind_method(D_METHOD("rset_config", "property", "mode"), &Node::rset_config);
 
+	ClassDB::bind_method(D_METHOD("_set_editor_description", "editor_description"), &Node::set_editor_description);
+	ClassDB::bind_method(D_METHOD("_get_editor_description"), &Node::get_editor_description);
+	ADD_PROPERTY(PropertyInfo(Variant::STRING, "editor_description", PROPERTY_HINT_MULTILINE_TEXT, "", PROPERTY_USAGE_EDITOR | PROPERTY_USAGE_INTERNAL), "_set_editor_description", "_get_editor_description");
+
 	ClassDB::bind_method(D_METHOD("_set_import_path", "import_path"), &Node::set_import_path);
 	ClassDB::bind_method(D_METHOD("_get_import_path"), &Node::get_import_path);
 	ADD_PROPERTY(PropertyInfo(Variant::NODE_PATH, "_import_path", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NOEDITOR | PROPERTY_USAGE_INTERNAL), "_set_import_path", "_get_import_path");
@@ -2814,6 +2845,8 @@ void Node::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("rset_id", "peer_id", "property", "value"), &Node::rset_id);
 	ClassDB::bind_method(D_METHOD("rset_unreliable", "property", "value"), &Node::rset_unreliable);
 	ClassDB::bind_method(D_METHOD("rset_unreliable_id", "peer_id", "property", "value"), &Node::rset_unreliable_id);
+
+	ClassDB::bind_method(D_METHOD("update_configuration_warning"), &Node::update_configuration_warning);
 
 	BIND_CONSTANT(NOTIFICATION_ENTER_TREE);
 	BIND_CONSTANT(NOTIFICATION_EXIT_TREE);
@@ -2844,6 +2877,8 @@ void Node::_bind_methods() {
 	BIND_CONSTANT(NOTIFICATION_WM_ABOUT);
 	BIND_CONSTANT(NOTIFICATION_CRASH);
 	BIND_CONSTANT(NOTIFICATION_OS_IME_UPDATE);
+	BIND_CONSTANT(NOTIFICATION_APP_RESUMED);
+	BIND_CONSTANT(NOTIFICATION_APP_PAUSED);
 
 	BIND_ENUM_CONSTANT(PAUSE_MODE_INHERIT);
 	BIND_ENUM_CONSTANT(PAUSE_MODE_STOP);
@@ -2860,10 +2895,6 @@ void Node::_bind_methods() {
 	ADD_SIGNAL(MethodInfo("tree_exiting"));
 	ADD_SIGNAL(MethodInfo("tree_exited"));
 
-	//ADD_PROPERTY( PropertyInfo( Variant::BOOL, "process/process" ),"set_process","is_processing") ;
-	//ADD_PROPERTY( PropertyInfo( Variant::BOOL, "process/physics_process" ), "set_physics_process","is_physics_processing") ;
-	//ADD_PROPERTY( PropertyInfo( Variant::BOOL, "process/input" ), "set_process_input","is_processing_input" ) ;
-	//ADD_PROPERTY( PropertyInfo( Variant::BOOL, "process/unhandled_input" ), "set_process_unhandled_input","is_processing_unhandled_input" ) ;
 	ADD_GROUP("Pause", "pause_");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "pause_mode", PROPERTY_HINT_ENUM, "Inherit,Stop,Process"), "set_pause_mode", "get_pause_mode");
 
@@ -2877,6 +2908,7 @@ void Node::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "owner", PROPERTY_HINT_RESOURCE_TYPE, "Node", 0), "set_owner", "get_owner");
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "multiplayer", PROPERTY_HINT_RESOURCE_TYPE, "MultiplayerAPI", 0), "", "get_multiplayer");
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "custom_multiplayer", PROPERTY_HINT_RESOURCE_TYPE, "MultiplayerAPI", 0), "set_custom_multiplayer", "get_custom_multiplayer");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "process_priority"), "set_process_priority", "get_process_priority");
 
 	BIND_VMETHOD(MethodInfo("_process", PropertyInfo(Variant::REAL, "delta")));
 	BIND_VMETHOD(MethodInfo("_physics_process", PropertyInfo(Variant::REAL, "delta")));
@@ -2887,9 +2919,6 @@ void Node::_bind_methods() {
 	BIND_VMETHOD(MethodInfo("_unhandled_input", PropertyInfo(Variant::OBJECT, "event", PROPERTY_HINT_RESOURCE_TYPE, "InputEvent")));
 	BIND_VMETHOD(MethodInfo("_unhandled_key_input", PropertyInfo(Variant::OBJECT, "event", PROPERTY_HINT_RESOURCE_TYPE, "InputEventKey")));
 	BIND_VMETHOD(MethodInfo(Variant::STRING, "_get_configuration_warning"));
-
-	//ClassDB::bind_method(D_METHOD("get_child",&Node::get_child,PH("index")));
-	//ClassDB::bind_method(D_METHOD("get_node",&Node::get_node,PH("path")));
 }
 
 String Node::_get_name_num_separator() {

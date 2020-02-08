@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2019 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2019 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -109,15 +109,10 @@ void EditorSpinSlider::_gui_input(const Ref<InputEvent> &p_event) {
 			}
 
 			if (grabbing_spinner) {
-				if (mm->get_control() || updown_offset != -1) {
-					set_value(Math::round(get_value()));
-					if (ABS(grabbing_spinner_dist_cache) > 6) {
-						set_value(get_value() + SGN(grabbing_spinner_dist_cache));
-						grabbing_spinner_dist_cache = 0;
-						pre_grab_value = get_value();
-					}
+				if (mm->get_control()) {
+					set_value(Math::round(pre_grab_value + get_step() * grabbing_spinner_dist_cache * 10));
 				} else {
-					set_value(pre_grab_value + get_step() * grabbing_spinner_dist_cache * 10);
+					set_value(pre_grab_value + get_step() * grabbing_spinner_dist_cache);
 				}
 			}
 		} else if (updown_offset != -1) {
@@ -138,20 +133,39 @@ void EditorSpinSlider::_gui_input(const Ref<InputEvent> &p_event) {
 void EditorSpinSlider::_grabber_gui_input(const Ref<InputEvent> &p_event) {
 
 	Ref<InputEventMouseButton> mb = p_event;
+
+	if (grabbing_grabber) {
+		if (mb.is_valid()) {
+
+			if (mb->get_button_index() == BUTTON_WHEEL_UP) {
+				set_value(get_value() + get_step());
+				mousewheel_over_grabber = true;
+			} else if (mb->get_button_index() == BUTTON_WHEEL_DOWN) {
+				set_value(get_value() - get_step());
+				mousewheel_over_grabber = true;
+			}
+		}
+	}
+
 	if (mb.is_valid() && mb->get_button_index() == BUTTON_LEFT) {
 
 		if (mb->is_pressed()) {
 
 			grabbing_grabber = true;
-			grabbing_ratio = get_as_ratio();
-			grabbing_from = grabber->get_transform().xform(mb->get_position()).x;
+			if (!mousewheel_over_grabber) {
+				grabbing_ratio = get_as_ratio();
+				grabbing_from = grabber->get_transform().xform(mb->get_position()).x;
+			}
 		} else {
 			grabbing_grabber = false;
+			mousewheel_over_grabber = false;
 		}
 	}
 
 	Ref<InputEventMouseMotion> mm = p_event;
 	if (mm.is_valid() && grabbing_grabber) {
+		if (mousewheel_over_grabber)
+			return;
 
 		float grabbing_ofs = (grabber->get_transform().xform(mm->get_position()).x - grabbing_from) / float(grabber_range);
 		set_as_ratio(grabbing_ratio + grabbing_ofs);
@@ -214,9 +228,9 @@ void EditorSpinSlider::_notification(int p_what) {
 			draw_style_box(focus, Rect2(Vector2(), get_size()));
 		}
 
-		draw_string(font, Vector2(sb->get_offset().x, vofs), label, lc * Color(1, 1, 1, 0.5));
+		draw_string(font, Vector2(Math::round(sb->get_offset().x), vofs), label, lc * Color(1, 1, 1, 0.5));
 
-		draw_string(font, Vector2(sb->get_offset().x + string_width + sep, vofs), numstr, fc, number_width);
+		draw_string(font, Vector2(Math::round(sb->get_offset().x + string_width + sep), vofs), numstr, fc, number_width);
 
 		if (get_step() == 1) {
 			Ref<Texture> updown2 = get_icon("updown", "SpinBox");
@@ -267,6 +281,11 @@ void EditorSpinSlider::_notification(int p_what) {
 
 				grabber->set_size(Size2(0, 0));
 				grabber->set_position(get_global_position() + grabber_rect.position + grabber_rect.size * 0.5 - grabber->get_size() * 0.5);
+
+				if (mousewheel_over_grabber) {
+					Input::get_singleton()->warp_mouse_position(grabber->get_position() + grabber_rect.size);
+				}
+
 				grabber_range = width;
 			}
 		}
@@ -462,6 +481,7 @@ EditorSpinSlider::EditorSpinSlider() {
 	grabber->connect("gui_input", this, "_grabber_gui_input");
 	mouse_over_spin = false;
 	mouse_over_grabber = false;
+	mousewheel_over_grabber = false;
 	grabbing_grabber = false;
 	grabber_range = 1;
 	value_input = memnew(LineEdit);

@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2019 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2019 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -119,7 +119,10 @@ String NativeScript::get_class_name() const {
 
 void NativeScript::set_library(Ref<GDNativeLibrary> p_library) {
 	if (!library.is_null()) {
-		WARN_PRINT("library on NativeScript already set. Do nothing.");
+		WARN_PRINT("Library in NativeScript already set. Do nothing.");
+		return;
+	}
+	if (p_library.is_null()) {
 		return;
 	}
 	library = p_library;
@@ -743,7 +746,7 @@ void NativeScriptInstance::notification(int p_notification) {
 #ifdef DEBUG_ENABLED
 	if (p_notification == MainLoop::NOTIFICATION_CRASH) {
 		if (current_method_call != StringName("")) {
-			ERR_PRINTS("NativeScriptInstance detected crash on method: " + current_method_call);
+			ERR_PRINT("NativeScriptInstance detected crash on method: " + current_method_call);
 			current_method_call = "";
 		}
 	}

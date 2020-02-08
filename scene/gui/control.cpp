@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2019 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2019 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -47,6 +47,7 @@
 #include "editor/plugins/canvas_item_editor_plugin.h"
 #endif
 
+#ifdef TOOLS_ENABLED
 Dictionary Control::_edit_get_state() const {
 
 	Dictionary s;
@@ -155,6 +156,11 @@ bool Control::_edit_use_pivot() const {
 	return true;
 }
 
+Size2 Control::_edit_get_minimum_size() const {
+	return get_combined_minimum_size();
+}
+#endif
+
 void Control::set_custom_minimum_size(const Size2 &p_custom) {
 
 	if (p_custom == data.custom_minimum_size)
@@ -191,11 +197,6 @@ Size2 Control::get_combined_minimum_size() const {
 		const_cast<Control *>(this)->_update_minimum_size_cache();
 	}
 	return data.minimum_size_cache;
-}
-
-Size2 Control::_edit_get_minimum_size() const {
-
-	return get_combined_minimum_size();
 }
 
 Transform2D Control::_get_internal_transform() const {
@@ -461,11 +462,6 @@ void Control::_update_canvas_item_transform() {
 	Transform2D xform = _get_internal_transform();
 	xform[2] += get_position();
 
-	// We use a little workaround to avoid flickering when moving the pivot with _edit_set_pivot()
-	if (is_inside_tree() && Math::abs(Math::sin(data.rotation * 4.0f)) < 0.00001f && get_viewport()->is_snap_controls_to_pixels_enabled()) {
-		xform[2] = xform[2].round();
-	}
-
 	VisualServer::get_singleton()->canvas_item_set_transform(get_canvas_item(), xform);
 }
 
@@ -645,6 +641,7 @@ void Control::_notification(int p_notification) {
 		} break;
 		case NOTIFICATION_THEME_CHANGED: {
 
+			minimum_size_changed();
 			update();
 		} break;
 		case NOTIFICATION_MODAL_CLOSE: {
@@ -818,7 +815,7 @@ Size2 Control::get_minimum_size() const {
 
 Ref<Texture> Control::get_icon(const StringName &p_name, const StringName &p_type) const {
 
-	if (p_type == StringName() || p_type == "") {
+	if (p_type == StringName() || p_type == get_class_name()) {
 
 		const Ref<Texture> *tex = data.icon_override.getptr(p_name);
 		if (tex)
@@ -860,7 +857,7 @@ Ref<Texture> Control::get_icon(const StringName &p_name, const StringName &p_typ
 }
 
 Ref<Shader> Control::get_shader(const StringName &p_name, const StringName &p_type) const {
-	if (p_type == StringName() || p_type == "") {
+	if (p_type == StringName() || p_type == get_class_name()) {
 
 		const Ref<Shader> *sdr = data.shader_override.getptr(p_name);
 		if (sdr)
@@ -903,7 +900,7 @@ Ref<Shader> Control::get_shader(const StringName &p_name, const StringName &p_ty
 
 Ref<StyleBox> Control::get_stylebox(const StringName &p_name, const StringName &p_type) const {
 
-	if (p_type == StringName() || p_type == "") {
+	if (p_type == StringName() || p_type == get_class_name()) {
 		const Ref<StyleBox> *style = data.style_override.getptr(p_name);
 		if (style)
 			return *style;
@@ -949,7 +946,7 @@ Ref<StyleBox> Control::get_stylebox(const StringName &p_name, const StringName &
 }
 Ref<Font> Control::get_font(const StringName &p_name, const StringName &p_type) const {
 
-	if (p_type == StringName() || p_type == "") {
+	if (p_type == StringName() || p_type == get_class_name()) {
 		const Ref<Font> *font = data.font_override.getptr(p_name);
 		if (font)
 			return *font;
@@ -986,7 +983,7 @@ Ref<Font> Control::get_font(const StringName &p_name, const StringName &p_type) 
 }
 Color Control::get_color(const StringName &p_name, const StringName &p_type) const {
 
-	if (p_type == StringName() || p_type == "") {
+	if (p_type == StringName() || p_type == get_class_name()) {
 		const Color *color = data.color_override.getptr(p_name);
 		if (color)
 			return *color;
@@ -1026,7 +1023,7 @@ Color Control::get_color(const StringName &p_name, const StringName &p_type) con
 
 int Control::get_constant(const StringName &p_name, const StringName &p_type) const {
 
-	if (p_type == StringName() || p_type == "") {
+	if (p_type == StringName() || p_type == get_class_name()) {
 		const int *constant = data.constant_override.getptr(p_name);
 		if (constant)
 			return *constant;
@@ -1102,7 +1099,7 @@ bool Control::has_constant_override(const StringName &p_name) const {
 
 bool Control::has_icon(const StringName &p_name, const StringName &p_type) const {
 
-	if (p_type == StringName() || p_type == "") {
+	if (p_type == StringName() || p_type == get_class_name()) {
 		if (has_icon_override(p_name))
 			return true;
 	}
@@ -1141,7 +1138,7 @@ bool Control::has_icon(const StringName &p_name, const StringName &p_type) const
 
 bool Control::has_shader(const StringName &p_name, const StringName &p_type) const {
 
-	if (p_type == StringName() || p_type == "") {
+	if (p_type == StringName() || p_type == get_class_name()) {
 		if (has_shader_override(p_name))
 			return true;
 	}
@@ -1179,7 +1176,7 @@ bool Control::has_shader(const StringName &p_name, const StringName &p_type) con
 }
 bool Control::has_stylebox(const StringName &p_name, const StringName &p_type) const {
 
-	if (p_type == StringName() || p_type == "") {
+	if (p_type == StringName() || p_type == get_class_name()) {
 		if (has_stylebox_override(p_name))
 			return true;
 	}
@@ -1217,7 +1214,7 @@ bool Control::has_stylebox(const StringName &p_name, const StringName &p_type) c
 }
 bool Control::has_font(const StringName &p_name, const StringName &p_type) const {
 
-	if (p_type == StringName() || p_type == "") {
+	if (p_type == StringName() || p_type == get_class_name()) {
 		if (has_font_override(p_name))
 			return true;
 	}
@@ -1256,7 +1253,7 @@ bool Control::has_font(const StringName &p_name, const StringName &p_type) const
 
 bool Control::has_color(const StringName &p_name, const StringName &p_type) const {
 
-	if (p_type == StringName() || p_type == "") {
+	if (p_type == StringName() || p_type == get_class_name()) {
 		if (has_color_override(p_name))
 			return true;
 	}
@@ -1295,7 +1292,7 @@ bool Control::has_color(const StringName &p_name, const StringName &p_type) cons
 
 bool Control::has_constant(const StringName &p_name, const StringName &p_type) const {
 
-	if (p_type == StringName() || p_type == "") {
+	if (p_type == StringName() || p_type == get_class_name()) {
 		if (has_constant_override(p_name))
 			return true;
 	}
@@ -1411,6 +1408,9 @@ void Control::_size_changed() {
 }
 
 void Control::set_anchor(Margin p_margin, float p_anchor, bool p_keep_margin, bool p_push_opposite_anchor) {
+
+	ERR_FAIL_INDEX((int)p_margin, 4);
+
 	Rect2 parent_rect = get_parent_anchorable_rect();
 	float parent_range = (p_margin == MARGIN_LEFT || p_margin == MARGIN_RIGHT) ? parent_rect.size.x : parent_rect.size.y;
 	float previous_margin_pos = data.margin[p_margin] + data.anchor[p_margin] * parent_range;
@@ -1455,6 +1455,9 @@ void Control::set_anchor_and_margin(Margin p_margin, float p_anchor, float p_pos
 }
 
 void Control::set_anchors_preset(LayoutPreset p_preset, bool p_keep_margins) {
+
+	ERR_FAIL_INDEX((int)p_preset, 16);
+
 	//Left
 	switch (p_preset) {
 		case PRESET_TOP_LEFT:
@@ -1569,6 +1572,10 @@ void Control::set_anchors_preset(LayoutPreset p_preset, bool p_keep_margins) {
 }
 
 void Control::set_margins_preset(LayoutPreset p_preset, LayoutPresetMode p_resize_mode, int p_margin) {
+
+	ERR_FAIL_INDEX((int)p_preset, 16);
+	ERR_FAIL_INDEX((int)p_resize_mode, 4);
+
 	// Calculate the size if the node is not resized
 	Size2 min_size = get_minimum_size();
 	Size2 new_size = get_size();
@@ -1703,6 +1710,8 @@ void Control::set_anchors_and_margins_preset(LayoutPreset p_preset, LayoutPreset
 
 float Control::get_anchor(Margin p_margin) const {
 
+	ERR_FAIL_INDEX_V(int(p_margin), 4, 0.0);
+
 	return data.anchor[p_margin];
 }
 
@@ -1718,6 +1727,8 @@ void Control::_change_notify_margins() {
 }
 
 void Control::set_margin(Margin p_margin, float p_value) {
+
+	ERR_FAIL_INDEX((int)p_margin, 4);
 
 	data.margin[p_margin] = p_value;
 	_size_changed();
@@ -1738,6 +1749,8 @@ void Control::set_end(const Size2 &p_point) {
 }
 
 float Control::get_margin(Margin p_margin) const {
+
+	ERR_FAIL_INDEX_V((int)p_margin, 4, 0);
 
 	return data.margin[p_margin];
 }
@@ -1950,6 +1963,8 @@ void Control::add_constant_override(const StringName &p_name, int p_constant) {
 
 void Control::set_focus_mode(FocusMode p_focus_mode) {
 
+	ERR_FAIL_INDEX((int)p_focus_mode, 3);
+
 	if (is_inside_tree() && p_focus_mode == FOCUS_NONE && data.focus_mode != FOCUS_NONE && has_focus())
 		release_focus();
 
@@ -1993,14 +2008,15 @@ Control *Control::find_next_valid_focus() const {
 
 		if (!data.focus_next.is_empty()) {
 			Node *n = get_node(data.focus_next);
+			Control *c;
 			if (n) {
-				from = Object::cast_to<Control>(n);
-				ERR_FAIL_COND_V_MSG(!from, NULL, "Next focus node is not a control: " + n->get_name() + ".");
+				c = Object::cast_to<Control>(n);
+				ERR_FAIL_COND_V_MSG(!c, NULL, "Next focus node is not a control: " + n->get_name() + ".");
 			} else {
 				return NULL;
 			}
-			if (from->is_visible() && from->get_focus_mode() != FOCUS_NONE)
-				return from;
+			if (c->is_visible() && c->get_focus_mode() != FOCUS_NONE)
+				return c;
 		}
 
 		// find next child
@@ -2083,14 +2099,15 @@ Control *Control::find_prev_valid_focus() const {
 
 		if (!data.focus_prev.is_empty()) {
 			Node *n = get_node(data.focus_prev);
+			Control *c;
 			if (n) {
-				from = Object::cast_to<Control>(n);
-				ERR_FAIL_COND_V_MSG(!from, NULL, "Previous focus node is not a control: " + n->get_name() + ".");
+				c = Object::cast_to<Control>(n);
+				ERR_FAIL_COND_V_MSG(!c, NULL, "Previous focus node is not a control: " + n->get_name() + ".");
 			} else {
 				return NULL;
 			}
-			if (from->is_visible() && from->get_focus_mode() != FOCUS_NONE)
-				return from;
+			if (c->is_visible() && c->get_focus_mode() != FOCUS_NONE)
+				return c;
 		}
 
 		// find prev child
@@ -2149,9 +2166,7 @@ bool Control::has_focus() const {
 
 void Control::grab_focus() {
 
-	if (!is_inside_tree()) {
-		ERR_FAIL_COND(!is_inside_tree());
-	}
+	ERR_FAIL_COND(!is_inside_tree());
 
 	if (data.focus_mode == FOCUS_NONE) {
 		WARN_PRINT("This control can't grab focus. Use set_focus_mode() to allow a control to get focus.");
@@ -2204,9 +2219,11 @@ void Control::_modal_stack_remove() {
 	if (!data.MI)
 		return;
 
-	get_viewport()->_gui_remove_from_modal_stack(data.MI, data.modal_prev_focus_owner);
-
+	List<Control *>::Element *element = data.MI;
 	data.MI = NULL;
+
+	get_viewport()->_gui_remove_from_modal_stack(element, data.modal_prev_focus_owner);
+
 	data.modal_prev_focus_owner = 0;
 }
 
@@ -2265,7 +2282,7 @@ void Control::set_theme(const Ref<Theme> &p_theme) {
 	}
 
 	if (data.theme.is_valid()) {
-		data.theme->connect("changed", this, "_theme_changed");
+		data.theme->connect("changed", this, "_theme_changed", varray(), CONNECT_DEFERRED);
 	}
 }
 
@@ -2298,6 +2315,8 @@ Control *Control::make_custom_tooltip(const String &p_text) const {
 }
 
 void Control::set_default_cursor_shape(CursorShape p_shape) {
+
+	ERR_FAIL_INDEX(int(p_shape), CURSOR_MAX);
 
 	data.default_cursor = p_shape;
 }
@@ -2358,6 +2377,8 @@ NodePath Control::get_focus_previous() const {
 #define MAX_NEIGHBOUR_SEARCH_COUNT 512
 
 Control *Control::_get_focus_neighbour(Margin p_margin, int p_count) {
+
+	ERR_FAIL_INDEX_V((int)p_margin, 4, NULL);
 
 	if (p_count >= MAX_NEIGHBOUR_SEARCH_COUNT)
 		return NULL;
@@ -2449,9 +2470,9 @@ void Control::_window_find_focus_neighbour(const Vector2 &p_dir, Node *p_at, con
 		Transform2D xform = c->get_global_transform();
 
 		points[0] = xform.xform(Point2());
-		points[1] = xform.xform(Point2(get_size().x, 0));
-		points[2] = xform.xform(get_size());
-		points[3] = xform.xform(Point2(0, get_size().y));
+		points[1] = xform.xform(Point2(c->get_size().x, 0));
+		points[2] = xform.xform(c->get_size());
+		points[3] = xform.xform(Point2(0, c->get_size().y));
 
 		float min = 1e7;
 
@@ -2656,6 +2677,11 @@ Vector2 Control::get_pivot_offset() const {
 void Control::set_scale(const Vector2 &p_scale) {
 
 	data.scale = p_scale;
+	// Avoid having 0 scale values, can lead to errors in physics and rendering.
+	if (data.scale.x == 0)
+		data.scale.x = CMP_EPSILON;
+	if (data.scale.y == 0)
+		data.scale.y = CMP_EPSILON;
 	update();
 	_notify_transform();
 }
@@ -2761,6 +2787,8 @@ bool Control::is_clipping_contents() {
 
 void Control::set_h_grow_direction(GrowDirection p_direction) {
 
+	ERR_FAIL_INDEX((int)p_direction, 3);
+
 	data.h_grow = p_direction;
 	_size_changed();
 }
@@ -2771,6 +2799,8 @@ Control::GrowDirection Control::get_h_grow_direction() const {
 }
 
 void Control::set_v_grow_direction(GrowDirection p_direction) {
+
+	ERR_FAIL_INDEX((int)p_direction, 3);
 
 	data.v_grow = p_direction;
 	_size_changed();
@@ -2949,7 +2979,7 @@ void Control::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::VECTOR2, "rect_global_position", PROPERTY_HINT_NONE, "", 0), "_set_global_position", "get_global_position");
 	ADD_PROPERTY(PropertyInfo(Variant::VECTOR2, "rect_size", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_EDITOR), "_set_size", "get_size");
 	ADD_PROPERTY(PropertyInfo(Variant::VECTOR2, "rect_min_size"), "set_custom_minimum_size", "get_custom_minimum_size");
-	ADD_PROPERTY(PropertyInfo(Variant::REAL, "rect_rotation", PROPERTY_HINT_RANGE, "-1080,1080,0.01"), "set_rotation_degrees", "get_rotation_degrees");
+	ADD_PROPERTY(PropertyInfo(Variant::REAL, "rect_rotation", PROPERTY_HINT_RANGE, "-360,360,0.1,or_lesser,or_greater"), "set_rotation_degrees", "get_rotation_degrees");
 	ADD_PROPERTY(PropertyInfo(Variant::VECTOR2, "rect_scale"), "set_scale", "get_scale");
 	ADD_PROPERTY(PropertyInfo(Variant::VECTOR2, "rect_pivot_offset"), "set_pivot_offset", "get_pivot_offset");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "rect_clip_content"), "set_clip_contents", "is_clipping_contents");

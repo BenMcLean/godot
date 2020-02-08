@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2019 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2019 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -176,7 +176,6 @@ Error ColladaImport::_create_scene_skeletons(Collada::Node *p_node) {
 
 		Skeleton *sk = memnew(Skeleton);
 		int bone = 0;
-		sk->set_use_bones_in_world_transform(true); // This improves compatibility in Collada
 		for (int i = 0; i < p_node->children.size(); i++) {
 
 			_populate_skeleton(sk, p_node->children[i], bone, -1);
@@ -893,7 +892,7 @@ Error ColladaImport::_create_mesh_surfaces(bool p_optimize, Ref<ArrayMesh> &p_me
 						material = material_cache[target];
 
 				} else if (p.material != "") {
-					WARN_PRINTS("Collada: Unreferenced material in geometry instance: " + p.material);
+					WARN_PRINT("Collada: Unreferenced material in geometry instance: " + p.material);
 				}
 			}
 
@@ -1015,8 +1014,6 @@ Error ColladaImport::_create_resources(Collada::Node *p_node, bool p_use_compres
 		if (Object::cast_to<Path>(node)) {
 
 			Path *path = Object::cast_to<Path>(node);
-
-			String curve = ng->source;
 
 			if (curve_cache.has(ng->source)) {
 
@@ -1208,12 +1205,12 @@ Error ColladaImport::_create_resources(Collada::Node *p_node, bool p_use_compres
 					const Collada::MeshData &meshdata = collada.state.mesh_data_map[meshid];
 					mesh->set_name(meshdata.name);
 					Error err = _create_mesh_surfaces(morphs.size() == 0, mesh, ng2->material_map, meshdata, apply_xform, bone_remap, skin, morph, morphs, p_use_compression, use_mesh_builtin_materials);
-					ERR_FAIL_COND_V(err, err);
+					ERR_FAIL_COND_V_MSG(err, err, "Cannot create mesh surface.");
 
 					mesh_cache[meshid] = mesh;
 				} else {
 
-					WARN_PRINTS("Collada: Will not import geometry: " + meshid);
+					WARN_PRINT("Collada: Will not import geometry: " + meshid);
 				}
 			}
 
@@ -1240,7 +1237,7 @@ Error ColladaImport::_create_resources(Collada::Node *p_node, bool p_use_compres
 
 							mi->set_surface_material(i, material);
 						} else if (matname != "") {
-							WARN_PRINTS("Collada: Unreferenced material in geometry instance: " + matname);
+							WARN_PRINT("Collada: Unreferenced material in geometry instance: " + matname);
 						}
 					}
 				}
@@ -1260,7 +1257,7 @@ Error ColladaImport::_create_resources(Collada::Node *p_node, bool p_use_compres
 Error ColladaImport::load(const String &p_path, int p_flags, bool p_force_make_tangents, bool p_use_compression) {
 
 	Error err = collada.load(p_path, p_flags);
-	ERR_FAIL_COND_V(err, err);
+	ERR_FAIL_COND_V_MSG(err, err, "Cannot load file '" + p_path + "'.");
 
 	force_make_tangents = p_force_make_tangents;
 	ERR_FAIL_COND_V(!collada.state.visual_scene_map.has(collada.state.root_visual_scene), ERR_INVALID_DATA);
@@ -1411,7 +1408,7 @@ void ColladaImport::create_animations(bool p_make_tracks_in_all_bones, bool p_im
 
 				node = node_name_map[at.target];
 			} else {
-				WARN_PRINTS("Collada: Couldn't find node: " + at.target);
+				WARN_PRINT("Collada: Couldn't find node: " + at.target);
 				continue;
 			}
 		} else {
@@ -1591,7 +1588,7 @@ void ColladaImport::create_animation(int p_clip, bool p_make_tracks_in_all_bones
 				}
 
 				if (xform_idx == -1) {
-					WARN_PRINTS("Collada: Couldn't find matching node " + at.target + " xform for track " + at.param + ".");
+					WARN_PRINT("Collada: Couldn't find matching node " + at.target + " xform for track " + at.param + ".");
 					continue;
 				}
 
@@ -1669,7 +1666,7 @@ void ColladaImport::create_animation(int p_clip, bool p_make_tracks_in_all_bones
 
 			Collada::Node *cn = collada.state.scene_map[E->key()];
 			if (cn->ignore_anim) {
-				WARN_PRINTS("Collada: Ignoring animation on node: " + path);
+				WARN_PRINT("Collada: Ignoring animation on node: " + path);
 				continue;
 			}
 
@@ -1738,7 +1735,7 @@ void ColladaImport::create_animation(int p_clip, bool p_make_tracks_in_all_bones
 					//matrix
 					WARN_PRINT("Collada: Value keys for matrices not supported.");
 				} else {
-					WARN_PRINTS("Collada: Unexpected amount of value keys: " + itos(data.size()));
+					WARN_PRINT("Collada: Unexpected amount of value keys: " + itos(data.size()));
 				}
 
 				animation->track_insert_key(track, time, value);
@@ -1778,7 +1775,7 @@ Node *EditorSceneImporterCollada::import_scene(const String &p_path, uint32_t p_
 
 	Error err = state.load(p_path, flags, p_flags & EditorSceneImporter::IMPORT_GENERATE_TANGENT_ARRAYS, p_flags & EditorSceneImporter::IMPORT_USE_COMPRESSION);
 
-	ERR_FAIL_COND_V(err != OK, NULL);
+	ERR_FAIL_COND_V_MSG(err != OK, NULL, "Cannot load scene from file '" + p_path + "'.");
 
 	if (state.missing_textures.size()) {
 
@@ -1831,7 +1828,7 @@ Ref<Animation> EditorSceneImporterCollada::import_animation(const String &p_path
 	state.use_mesh_builtin_materials = false;
 
 	Error err = state.load(p_path, Collada::IMPORT_FLAG_ANIMATION, p_flags & EditorSceneImporter::IMPORT_GENERATE_TANGENT_ARRAYS);
-	ERR_FAIL_COND_V(err != OK, RES());
+	ERR_FAIL_COND_V_MSG(err != OK, RES(), "Cannot load animation from file '" + p_path + "'.");
 
 	state.create_animations(p_flags & EditorSceneImporter::IMPORT_ANIMATION_FORCE_ALL_TRACKS_IN_ALL_CLIPS, p_flags & EditorSceneImporter::IMPORT_ANIMATION_KEEP_VALUE_TRACKS);
 	if (state.scene)

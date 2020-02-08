@@ -5,8 +5,8 @@
 /*                           GODOT ENGINE                                */
 /*                      https://godotengine.org                          */
 /*************************************************************************/
-/* Copyright (c) 2007-2019 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2019 Godot Engine contributors (cf. AUTHORS.md)    */
+/* Copyright (c) 2007-2020 Juan Linietsky, Ariel Manzur.                 */
+/* Copyright (c) 2014-2020 Godot Engine contributors (cf. AUTHORS.md).   */
 /*                                                                       */
 /* Permission is hereby granted, free of charge, to any person obtaining */
 /* a copy of this software and associated documentation files (the       */
@@ -279,6 +279,11 @@ public:
 		ARGUMENT_QUALIFIER_INOUT,
 	};
 
+	enum SubClassTag {
+		TAG_GLOBAL,
+		TAG_ARRAY,
+	};
+
 	struct Node {
 		Node *next;
 
@@ -431,6 +436,7 @@ public:
 		};
 
 		int block_type;
+		SubClassTag block_tag;
 
 		struct Variable {
 			DataType type;
@@ -449,6 +455,7 @@ public:
 				parent_function(NULL),
 				parent_block(NULL),
 				block_type(BLOCK_TYPE_STANDART),
+				block_tag(SubClassTag::TAG_GLOBAL),
 				single_statement(false) {}
 	};
 
@@ -519,11 +526,13 @@ public:
 			DataType type;
 			DataInterpolation interpolation;
 			DataPrecision precision;
+			int array_size;
 
 			Varying() :
 					type(TYPE_VOID),
 					interpolation(INTERPOLATION_FLAT),
-					precision(PRECISION_DEFAULT) {}
+					precision(PRECISION_DEFAULT),
+					array_size(0) {}
 		};
 
 		struct Uniform {
@@ -643,6 +652,7 @@ public:
 		Map<StringName, BuiltInInfo> built_ins;
 		bool can_discard;
 	};
+	static bool has_builtin(const Map<StringName, ShaderLanguage::FunctionInfo> &p_functions, const StringName &p_name);
 
 private:
 	struct KeyWord {
@@ -710,17 +720,13 @@ private:
 	bool _validate_assign(Node *p_node, const Map<StringName, BuiltInInfo> &p_builtin_types, String *r_message = NULL);
 	bool _validate_operator(OperatorNode *p_op, DataType *r_ret_type = NULL);
 
-	enum SubClassTag {
-		TAG_GLOBAL,
-		TAG_ARRAY
-	};
-
 	struct BuiltinFuncDef {
 		enum { MAX_ARGS = 5 };
 		const char *name;
 		DataType rettype;
 		const DataType args[MAX_ARGS];
 		SubClassTag tag;
+		bool high_end;
 	};
 
 	struct BuiltinFuncOutArgs { //arguments used as out in built in functions
@@ -740,6 +746,8 @@ private:
 	static const BuiltinFuncDef builtin_func_defs[];
 	static const BuiltinFuncOutArgs builtin_func_out_args[];
 
+	Error _validate_datatype(DataType p_type);
+
 	bool _validate_function_call(BlockNode *p_block, OperatorNode *p_func, DataType *r_ret_type);
 	bool _parse_function_arguments(BlockNode *p_block, const Map<StringName, BuiltInInfo> &p_builtin_types, OperatorNode *p_func, int *r_complete_arg = NULL);
 
@@ -748,6 +756,8 @@ private:
 
 	Node *_parse_and_reduce_expression(BlockNode *p_block, const Map<StringName, BuiltInInfo> &p_builtin_types);
 	Error _parse_block(BlockNode *p_block, const Map<StringName, BuiltInInfo> &p_builtin_types, bool p_just_one = false, bool p_can_break = false, bool p_can_continue = false);
+	String _get_shader_type_list(const Set<String> &p_shader_types) const;
+
 	Error _parse_shader(const Map<StringName, FunctionInfo> &p_functions, const Vector<StringName> &p_render_modes, const Set<String> &p_shader_types);
 
 	Error _find_last_flow_op_in_block(BlockNode *p_block, FlowOperation p_op);
